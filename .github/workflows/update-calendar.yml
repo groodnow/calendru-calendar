@@ -1,6 +1,11 @@
 name: Update Calend.ru calendar
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/**"
+      - ".github/workflows/**"
   schedule:
     # 00:15 UTC = 07:15 in Altai (UTC+7)
     - cron: "15 0 * * *"
