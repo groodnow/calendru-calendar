@@ -56,7 +56,7 @@ def main():
         if start is None:
             continue
         start_key = value_key(start.dt)
-        original_properties = list(event.getall("RDATE"))
+        original_properties = [value for key, value in event.property_items() if key == "RDATE"]
         if not original_properties:
             continue
 
