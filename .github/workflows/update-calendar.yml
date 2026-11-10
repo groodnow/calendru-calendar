@@ -1,0 +1,45 @@
+name: Update Calend.ru calendar
+
+on:
+  schedule:
+    # 00:15 UTC = 07:15 in Altai (UTC+7)
+    - cron: "15 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-calendru-calendar
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check icalendar
+
+      - name: Download and clean calendar
+        run: python scripts/update_calendar.py
+
+      - name: Publish updated calendar
+        run: |
+          touch docs/.nojekyll
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/calend-russtate.ics docs/.nojekyll
+          if git diff --cached --quiet; then
+            echo "Calendar has not changed."
+          else
+            git commit -m "Update cleaned Calend.ru calendar"
+            git push
+          fi
