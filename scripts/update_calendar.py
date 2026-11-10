@@ -4,7 +4,7 @@ from datetime import date, datetime
 from pathlib import Path
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
-from icalendar import Calendar
+from icalendar import Calendar, vDDDLists
 import os
 import sys
 
@@ -17,7 +17,6 @@ OUTPUT = Path("docs/calend-russtate.ics")
 
 
 def stamp(event):
-    """Prefer the most recently modified copy when a UID is repeated."""
     value = event.get("LAST-MODIFIED") or event.get("DTSTAMP")
     if value is None:
         return datetime.min
@@ -28,7 +27,6 @@ def stamp(event):
 
 
 def value_key(value):
-    """Comparable key for DTSTART/RDATE values, retaining date vs datetime."""
     if isinstance(value, datetime):
         return ("datetime", value.isoformat())
     if isinstance(value, date):
@@ -52,34 +50,30 @@ def main():
     if not events:
         raise RuntimeError("No VEVENT records found; refusing to publish an empty calendar")
 
-    # Remove only RDATE values that duplicate this event's DTSTART.
     recurrence_overlaps = 0
     for event in events:
         start = event.get("DTSTART")
         if start is None:
             continue
         start_key = value_key(start.dt)
-        rdate_properties = list(event.getall("RDATE"))
-        if not rdate_properties:
+        original_properties = list(event.getall("RDATE"))
+        if not original_properties:
             continue
 
-        filtered_properties = []
+        retained = []
         changed = False
-        for prop in rdate_properties:
+        for prop in original_properties:
             kept = [item for item in prop.dts if value_key(item.dt) != start_key]
             recurrence_overlaps += len(prop.dts) - len(kept)
-            changed = changed or len(kept) != len(prop.dts)
+            changed |= len(kept) != len(prop.dts)
             if kept:
-                filtered_properties.append((prop, kept)
+                retained.append(vDDDLists(kept))
 
         if changed:
             event.pop("RDATE")
-            for original, kept in filtered_properties:
-                from icalendar import vDDDLists
-                replacement = vDDDLists(kept)
+            for replacement in retained:
                 event.add("RDATE", replacement, encode=0)
 
-    # RFC 5545 UID identifies one logical event. Keep the latest modified copy.
     by_uid = {}
     no_uid = []
     for event in events:
@@ -94,7 +88,6 @@ def main():
     unique_events = list(by_uid.values()) + no_uid
     duplicate_uids_removed = len(events) - len(unique_events)
 
-    # Retain calendar-level properties and any non-event components.
     output = Calendar()
     for key, value in calendar.items():
         output.add(key, value)
